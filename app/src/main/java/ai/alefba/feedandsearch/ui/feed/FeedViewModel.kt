@@ -2,63 +2,60 @@ package ai.alefba.feedandsearch.ui.feed
 
 import ai.alefba.feedandsearch.data.remote.entity.feed.Session
 import ai.alefba.feedandsearch.data.repository.FeedRepository
-import ai.alefba.feedandsearch.util.DataResult
-import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.count
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
-class FeedViewModel@Inject constructor(
+class FeedViewModel @Inject constructor(
     private val repository: FeedRepository
 ) : ViewModel() {
+    private val pager: Pager<Int, Session> =
+        Pager(config = PagingConfig(pageSize = 10), pagingSourceFactory = ::initPagingSource)
+    val filterStateChanges = MutableSharedFlow<Unit>()
+    private val searchQuery = MutableStateFlow("")
+    private val _searchQueryChanges = MutableSharedFlow<Unit>()
+    val searchQueryChanges: SharedFlow<Unit> = _searchQueryChanges.asSharedFlow()
 
-    val sessions: Flow<PagingData<Session>> = Pager(PagingConfig(10)) {
-        FeedSource(repository)
-    }.flow.cachedIn(viewModelScope)
+    @VisibleForTesting
+    lateinit var pagingSource: FeedSource
+        private set
+
+    init {
+
+        searchQuery
+            .debounce(300L)
+            .distinctUntilChanged()
+            .onEach { _searchQueryChanges.emit(Unit) }
+            .launchIn(viewModelScope)
+    }
+
+    @VisibleForTesting
+    fun initPagingSource() = FeedSource(
+        repository,
+        searchQuery.value
+    ).also(::pagingSource::set)
+
+    fun onSearch(query: String) {
+        if (searchQuery.value.isEmpty() && query.isBlank()) return
+        if (searchQuery.value.isBlank() && query.length < 3) return
+
+        searchQuery.tryEmit(query)
+    }
+
+    val sessions = pager.flow
 
     var loadError = mutableStateOf("")
 
-    /*fun loadSessions() {
-        Log.i(javaClass.name,"Loading sessions")
-        isLoading.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.getAllFeed(0).onEach { result ->
-                withContext(Dispatchers.Main){
-                    when(result){
-                        is DataResult.Success ->{
-                            isLoading.value = false
-                            sessionsList.value = result.data?.session!!
-                        }
-                        is DataResult.Error ->{
-                            isLoading.value = false
-                            loadError.value = result.message!!
-                        }
-                        is DataResult.Loading ->{
-                            if(result.data!=null)
-                                sessionsList.value = result.data.session
-                            isLoading.value = true
-                        }
-                    }
-                }
-            }.launchIn(this)
-        }
-    }*/
-
-    fun clearError(){
+    fun clearError() {
         loadError.value = ""
     }
 }

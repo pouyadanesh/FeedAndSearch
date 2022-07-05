@@ -12,4 +12,5 @@
     <string name="description">this is my session art work</string>
     <string name="fetching_sessions">fetching sessions</string>
     <string name="error_icon_content_description">error icon</string>
+    <string name="search">search</string>
 </resources>
