@@ -7,8 +7,14 @@ import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -20,15 +26,17 @@ class FeedViewModel@Inject constructor(
     private val repository: FeedRepository
 ) : ViewModel() {
 
-    var isLoading = mutableStateOf(false)
-    var loadError = mutableStateOf("")
-    val sessionsList = mutableStateOf(listOf<Session>())
+    val sessions: Flow<PagingData<Session>> = Pager(PagingConfig(10)) {
+        FeedSource(repository)
+    }.flow.cachedIn(viewModelScope)
 
-    fun loadSessions() {
+    var loadError = mutableStateOf("")
+
+    /*fun loadSessions() {
         Log.i(javaClass.name,"Loading sessions")
         isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            repository.getAllFeed().onEach { result ->
+            repository.getAllFeed(0).onEach { result ->
                 withContext(Dispatchers.Main){
                     when(result){
                         is DataResult.Success ->{
@@ -48,7 +56,7 @@ class FeedViewModel@Inject constructor(
                 }
             }.launchIn(this)
         }
-    }
+    }*/
 
     fun clearError(){
         loadError.value = ""

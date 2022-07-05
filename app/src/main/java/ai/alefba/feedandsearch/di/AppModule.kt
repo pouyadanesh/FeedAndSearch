@@ -2,7 +2,6 @@ package ai.alefba.feedandsearch.di
 
 import ai.alefba.feedandsearch.data.remote.FeedApi
 import ai.alefba.feedandsearch.data.repository.FeedRepository
-import ai.alefba.feedandsearch.data.repository.FeedRepositoryImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,12 +20,6 @@ object AppModule {
     //so I can provide a singleton reference of application in coroutine
     fun provideApplicationScope(): CoroutineScope {
         return CoroutineScope(SupervisorJob())
-    }
-
-    @Provides
-    @Singleton
-    fun provideFeedRepository(api : FeedApi) : FeedRepository{
-        return FeedRepositoryImpl(api)
     }
 }
 

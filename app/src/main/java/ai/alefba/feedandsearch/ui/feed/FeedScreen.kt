@@ -2,16 +2,17 @@ package ai.alefba.feedandsearch.ui.feed
 
 import ai.alefba.feedandsearch.R
 import ai.alefba.feedandsearch.data.remote.entity.feed.Session
+import ai.alefba.feedandsearch.ui.common.ErrorColumn
+import ai.alefba.feedandsearch.ui.common.ErrorRow
+import ai.alefba.feedandsearch.ui.common.loading.LoadingColumn
+import ai.alefba.feedandsearch.ui.common.loading.LoadingRow
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Card
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -35,8 +36,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.paging.CombinedLoadStates
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+
+val span: (LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(2) }
 
 @Composable
 fun FeedScreen(
@@ -44,16 +51,15 @@ fun FeedScreen(
     lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current
 ) {
 
-    val isLoading by remember { viewModel.isLoading }
     val loadError by remember { viewModel.loadError }
-    val sessionsList by remember { viewModel.sessionsList }
+    val page by remember { viewModel.page }
 
     //Make a disposable effect observe lifecycle to trigger a data load/update
     //when activity comes to the foreground
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
-                viewModel.loadSessions()
+                viewModel.sessions
             }
         }
 
@@ -68,7 +74,7 @@ fun FeedScreen(
 
     //Check if there are errors to display
     if (loadError.isNotEmpty()) {
-        Toast.makeText(LocalContext.current, "$loadError", Toast.LENGTH_LONG).show()
+        Toast.makeText(LocalContext.current, loadError, Toast.LENGTH_LONG).show()
         viewModel.clearError()
     }
 
@@ -77,21 +83,52 @@ fun FeedScreen(
             .fillMaxSize()
             .background(color = MaterialTheme.colors.background)
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-        ) {
-            items(items = sessionsList) { session ->
-                SessionItem(session)
+        val sessionsList: LazyPagingItems<Session> = viewModel.sessions.collectAsLazyPagingItems()
+        val state = rememberLazyGridState()
+        when (sessionsList.loadState.refresh) {
+            is LoadState.Loading -> {
+                LoadingColumn(stringResource(id = R.string.fetching_sessions))
+            }
+            is LoadState.Error -> {
+                val error = sessionsList.loadState.refresh as LoadState.Error
+                ErrorColumn(error.error.message.orEmpty())
+            }
+            else -> {
+                LazyMoviesGrid(state, sessionsList)
             }
         }
+    }
+}
 
-        if (isLoading && sessionsList.isEmpty()) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(100.dp)
-                    .align(Alignment.Center)
-            )
+@Composable
+private fun LazyMoviesGrid(state: LazyGridState, sessionsList: LazyPagingItems<Session>) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        state = state
+    ) {
+        items(sessionsList.itemCount) { index ->
+            val session = sessionsList.peek(index) ?: return@items
+            SessionItem(session)
         }
+        renderLoading(sessionsList.loadState)
+        renderError(sessionsList.loadState)
+    }
+}
+
+fun LazyGridScope.renderLoading(loadState: CombinedLoadStates) {
+    if (loadState.append !is LoadState.Loading) return
+
+    item(span = span) {
+        val title = stringResource(R.string.fetching_sessions)
+        LoadingRow(title = title, modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+private fun LazyGridScope.renderError(loadState: CombinedLoadStates) {
+    val message = (loadState.append as? LoadState.Error)?.error?.message ?: return
+
+    item(span = span) {
+        ErrorRow(title = message, modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
@@ -145,12 +182,14 @@ fun SessionItem(session: Session) {
                     .fillMaxWidth()
                     .align(Alignment.BottomStart)
             ) {
-                Text(text = session.name,
+                Text(
+                    text = session.name,
                     fontSize = 24.sp,
                     fontWeight = Bold,
                     color = Color.White,
                     modifier = Modifier
-                        .padding(8.dp,0.dp))
+                        .padding(8.dp, 0.dp)
+                )
                 Text(
                     text = genres,
                     fontSize = 18.sp,
